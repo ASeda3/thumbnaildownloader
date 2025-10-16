@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbnail Downloader</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+        .container-card {
+            background-color: #ffffff;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        .btn {
+            transition: all 0.15s ease;
+        }
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .btn-primary {
+            background-color: #ef4444; /* Red 500 */
+            color: white;
+        }
+        .btn-secondary {
+            background-color: #10b981; /* Emerald 500 */
+            color: white;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-start justify-center p-4 sm:p-8">
+
+    <div class="w-full max-w-4xl mt-10 container-card rounded-xl p-6 md:p-10">
+        
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-800 mb-6 text-center">
+            YouTube Thumbnail Downloader
+        </h1>
+        <p class="text-center text-gray-600 mb-8">
+            Paste a YouTube video URL below to grab the highest quality thumbnail. (Try **Ctrl+V** anywhere!)
+        </p>
+
+        <!-- Input and Action Area -->
+        <div class="flex flex-col sm:flex-row gap-4 mb-8">
+            <input 
+                type="url" 
+                id="urlInput" 
+                placeholder="e.g., https://www.youtube.com/watch?v=dQw4w9WgXcQ" 
+                class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition duration-150"
+            >
+            <button 
+                id="getButton"
+                onclick="getThumbnail()"
+                class="btn btn-primary px-6 py-3 rounded-lg font-semibold whitespace-nowrap shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-red-300"
+            >
+                Get Thumbnail
+            </button>
+        </div>
+
+        <!-- Message/Error Area -->
+        <div id="messageBox" class="p-3 mb-4 rounded-lg hidden text-sm font-medium"></div>
+
+        <!-- Results Area -->
+        <div id="resultsArea" class="hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">
+                Thumbnail Preview
+            </h2>
+            
+            <!-- Main Preview Section -->
+            <div class="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p id="maxResPreviewLabel" class="font-semibold text-lg text-gray-700 mb-3">Highest Quality (MaxResDefault)</p>
+                <div class="relative aspect-video w-full max-w-4xl mx-auto overflow-hidden rounded-lg shadow-xl">
+                    <img 
+                        id="maxResImage" 
+                        src="" 
+                        alt="YouTube Thumbnail Preview" 
+                        class="w-full h-full object-cover transition duration-300 hover:scale-[1.02] cursor-pointer"
+                        onclick="window.open(document.getElementById('maxResImage').src, '_blank')"
+                        onerror="handleMaxResFailure(this)"
+                    >
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition duration-300 bg-black bg-opacity-30">
+                         <span class="text-white text-xl font-bold p-2 border-2 border-white rounded-full">Click to Open Full Size</span>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <a id="maxResDownload" href="#" download="youtube_thumbnail_maxres.jpg" class="btn btn-secondary px-4 py-2 rounded-lg font-semibold shadow-md focus:ring-4 focus:ring-emerald-300">
+                        Download MaxRes
+                    </a>
+                </div>
+            </div>
+
+            <!-- Quality Options Section -->
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">
+                Other Quality Options
+            </h2>
+            <div id="qualityOptions" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Buttons will be injected here -->
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        
+        /**
+         * Handles the case where the highest resolution thumbnail (maxresdefault.jpg) fails to load.
+         * It falls back to sddefault.jpg, or a placeholder if that also fails.
+         * @param {HTMLImageElement} imgElement The image element that failed to load.
+         */
+        function handleMaxResFailure(imgElement) {
+            // Stop further execution if the video ID is not set (shouldn't happen, but safe guard)
+            if (!currentVideoId) return;
+
+            const maxResDownload = document.getElementById('maxResDownload');
+            const previewLabel = document.getElementById('maxResPreviewLabel');
+            const messageBox = document.getElementById('messageBox');
+            
+            // The image is currently attempting to load the URL in imgElement.src
+            
+            if (imgElement.getAttribute('data-fallback-attempted') === 'sd') {
+                // Second failure: sddefault.jpg also failed. Fallback to hqdefault.jpg
+                const hqResUrl = `https://img.youtube.com/vi/${currentVideoId}/hqdefault.jpg`;
+
+                // Set the final fallback source
+                imgElement.src = hqResUrl;
+                imgElement.setAttribute('data-fallback-attempted', 'hq');
+
+                // Update download link and label to reflect the new quality
+                maxResDownload.href = hqResUrl;
+                maxResDownload.download = "youtube_thumbnail_hqres.jpg";
+                maxResDownload.classList.remove('opacity-50', 'cursor-not-allowed');
+                maxResDownload.onclick = null;
+                
+                previewLabel.textContent = 'Highest Available Quality (High Definition - hqdefault)';
+                messageBox.textContent = 'Warning: Max and Standard resolution thumbnails were not found. The preview and download link are now using the High Definition (480x360) quality.';
+            } else if (imgElement.getAttribute('data-fallback-attempted') === 'hq') {
+                 // Third failure: hqdefault.jpg also failed. Use a generic placeholder.
+                 imgElement.src = 'https://placehold.co/1280x720/000000/ffffff?text=Thumbnail+Not+Available';
+                
+                 // Clear the download link and disable the button entirely
+                 maxResDownload.href = '#';
+                 maxResDownload.download = '';
+                 maxResDownload.classList.add('opacity-50', 'cursor-not-allowed');
+                 maxResDownload.onclick = (e) => { e.preventDefault(); };
+                
+                 previewLabel.textContent = 'Thumbnail Unavailable';
+                 messageBox.textContent = 'Error: No high-quality thumbnail found for this video. Showing the lowest available default or a generic placeholder.';
+
+            } else {
+                // First failure: maxresdefault.jpg failed. Fallback to sddefault.jpg.
+                const sdResUrl = `https://img.youtube.com/vi/${currentVideoId}/sddefault.jpg`;
+                
+                // Set the new source, which might trigger this function again if sddefault also fails.
+                imgElement.src = sdResUrl;
+                imgElement.setAttribute('data-fallback-attempted', 'sd');
+                
+                // Update download link and label to reflect the new quality
+                maxResDownload.href = sdResUrl;
+                maxResDownload.download = "youtube_thumbnail_sdres.jpg";
+                maxResDownload.classList.remove('opacity-50', 'cursor-not-allowed');
+                maxResDownload.onclick = null; 
+                
+                previewLabel.textContent = 'Highest Available Quality (Standard Definition - sddefault)';
+                messageBox.textContent = 'Note: Max resolution thumbnail (1280x720) was not found. The preview and main download button now show the Standard Definition (640x480) quality.';
+            }
+            
+            // Ensure the message box is visible and uses the warning style
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-700');
+            messageBox.classList.add('bg-yellow-100', 'text-yellow-700');
+        }
+
+
+        /**
+         * Extracts the YouTube video ID from various URL formats.
+         * @param {string} url The full YouTube URL.
+         * @returns {string|null} The video ID or null if not found.
+         */
+        function extractVideoId(url) {
+            // Regex to match standard 'watch?v=' and short 'youtu.be/' links
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|\w*\/|watch\?.*v=))([^&]*)|youtu\.be\/([^&]*)/;
+            const match = url.match(regex);
+            
+            // Return group 1 (for youtube.com) or group 2 (for youtu.be)
+            return match ? (match[1] || match[2]) : null;
+        }
+
+        /**
+         * Generates the thumbnail data based on the video ID.
+         * @param {string} videoId The extracted video ID.
+         */
+        function generateThumbnailData(videoId) {
+            const baseUrl = `https://img.youtube.com/vi/${videoId}`;
+            const formats = [
+                { id: 'maxres', filename: 'maxresdefault.jpg', label: '1280x720 (Max)', default: true },
+                { id: 'hq', filename: 'hqdefault.jpg', label: '480x360 (High)' },
+                { id: 'mq', filename: 'mqdefault.jpg', label: '320x180 (Medium)' },
+                { id: 'sd', filename: 'sddefault.jpg', label: '640x480 (Standard)' },
+                { id: 'default', filename: 'default.jpg', label: '120x90 (Low)' },
+            ];
+
+            const qualityOptionsDiv = document.getElementById('qualityOptions');
+            qualityOptionsDiv.innerHTML = ''; // Clear previous buttons
+
+            // 1. Reset and Set the main preview image and download link
+            const maxResUrl = `${baseUrl}/maxresdefault.jpg`;
+            const maxResImage = document.getElementById('maxResImage');
+            const maxResDownload = document.getElementById('maxResDownload');
+            
+            // Reset state
+            maxResImage.removeAttribute('data-fallback-attempted');
+            document.getElementById('maxResPreviewLabel').textContent = 'Highest Quality (MaxResDefault)';
+            
+            maxResImage.src = maxResUrl;
+            maxResDownload.href = maxResUrl;
+            maxResDownload.download = "youtube_thumbnail_maxres.jpg";
+            
+            // Reset error handling classes on download button
+            maxResDownload.classList.remove('opacity-50', 'cursor-not-allowed');
+            maxResDownload.onclick = null;
+            
+            
+            // 2. Generate the buttons for other quality options
+            formats.filter(f => !f.default).forEach(format => {
+                const url = `${baseUrl}/${format.filename}`;
+                const cardHtml = `
+                    <div class="bg-white p-4 rounded-lg shadow-md hover:shadow-xl transition duration-300 border border-gray-100">
+                        <p class="font-semibold text-gray-700 mb-2">${format.label}</p>
+                        <a href="${url}" target="_blank" class="w-full h-auto block rounded-md overflow-hidden mb-3">
+                            <img src="${url}" 
+                                 alt="${format.label} Thumbnail" 
+                                 class="w-full h-auto object-cover rounded-md"
+                                 onerror="this.src='https://placehold.co/480x360/CCCCCC/666666?text=${format.id.toUpperCase()}+Missing'; this.parentNode.nextElementSibling.classList.add('opacity-50', 'cursor-not-allowed');"
+                            >
+                        </a>
+                        <a href="${url}" 
+                           download="youtube_thumbnail_${format.id}.jpg" 
+                           class="btn btn-secondary w-full text-center px-4 py-2 rounded-lg font-semibold shadow-md focus:ring-4 focus:ring-emerald-300">
+                            Download ${format.id.toUpperCase()}
+                        </a>
+                    </div>
+                `;
+                qualityOptionsDiv.insertAdjacentHTML('beforeend', cardHtml);
+            });
+
+            document.getElementById('resultsArea').classList.remove('hidden');
+        }
+
+
+        /**
+         * Main function triggered by the button click.
+         */
+        function getThumbnail() {
+            const urlInput = document.getElementById('urlInput');
+            const url = urlInput.value.trim();
+            const messageBox = document.getElementById('messageBox');
+
+            // Hide previous results and clear messages
+            document.getElementById('resultsArea').classList.add('hidden');
+            messageBox.classList.add('hidden');
+            messageBox.textContent = '';
+
+
+            if (!url) {
+                messageBox.textContent = 'Please enter a valid YouTube video URL.';
+                messageBox.classList.remove('hidden', 'bg-yellow-100', 'text-yellow-700');
+                messageBox.classList.add('bg-red-100', 'text-red-700');
+                return;
+            }
+
+            const videoId = extractVideoId(url);
+
+            if (!videoId) {
+                messageBox.textContent = 'Could not find a valid video ID in the provided URL. Please check the link format.';
+                messageBox.classList.remove('hidden', 'bg-yellow-100', 'text-yellow-700');
+                messageBox.classList.add('bg-red-100', 'text-red-700');
+                return;
+            }
+
+            currentVideoId = videoId;
+            
+            // Success: Generate and display thumbnails
+            messageBox.textContent = 'Success! Thumbnails generated for video ID: ' + videoId;
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-700');
+            messageBox.classList.add('bg-yellow-100', 'text-yellow-700');
+            
+            generateThumbnailData(videoId);
+        }
+
+        // Global variable for storing the extracted Video ID
+        let currentVideoId = null;
+
+        /*
+         * Global Paste Listener for Ctrl+V / Cmd+V
+         * Automatically pastes and processes the URL if it looks like a YouTube link.
+         */
+        document.addEventListener('paste', (event) => {
+            const urlInput = document.getElementById('urlInput');
+            // Get text data from clipboard
+            const pastedText = (event.clipboardData || window.clipboardData).getData('text');
+
+            if (pastedText) {
+                const trimmedText = pastedText.trim();
+                
+                // Simple check if the clipboard content is likely a YouTube URL
+                if (trimmedText.includes('youtube.com') || trimmedText.includes('youtu.be')) {
+                    
+                    // Prevent the default paste action to ensure we handle it only once 
+                    // and prevent accidental pasting into other focused elements.
+                    event.preventDefault(); 
+                    
+                    // Set the input field value
+                    urlInput.value = trimmedText;
+                    
+                    // Automatically trigger the thumbnail fetch
+                    getThumbnail();
+                }
+            }
+        });
+    </script>
+
+</body>
+</html>
