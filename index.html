@@ -88,7 +88,9 @@
                     </div>
                 </div>
                 <div class="mt-4 flex justify-end">
-                    <a id="maxResDownload" href="#" download="youtube_thumbnail_maxres.jpg" class="btn btn-secondary px-4 py-2 rounded-lg font-semibold shadow-md focus:ring-4 focus:ring-emerald-300">
+                    <a id="maxResDownload" href="#" download="youtube_thumbnail_maxres.jpg" 
+                       onclick="handleMaxResDownload(event)"
+                       class="btn btn-secondary px-4 py-2 rounded-lg font-semibold shadow-md focus:ring-4 focus:ring-emerald-300">
                         Download MaxRes
                     </a>
                 </div>
@@ -107,6 +109,78 @@
 
     <script>
         
+        // Global variable for storing the extracted Video ID
+        let currentVideoId = null;
+
+        /**
+         * Forces the download of a file by fetching its content as a blob
+         * and initiating a click on a temporary anchor tag.
+         * @param {string} url The URL of the file to download.
+         * @param {string} filename The desired filename.
+         */
+        async function forceDownload(url, filename) {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.textContent = `Preparing to download ${filename}...`;
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-700');
+            messageBox.classList.add('bg-yellow-100', 'text-yellow-700');
+            
+            try {
+                // Fetch the image content
+                const response = await fetch(url, { mode: 'cors' });
+                if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+                
+                const blob = await response.blob();
+                
+                // Create a temporary link element
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                
+                // Initiate the download
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                URL.revokeObjectURL(a.href); // Clean up the blob URL
+
+                messageBox.textContent = `Download started for ${filename}. Check your downloads folder!`;
+                
+            } catch (error) {
+                console.error("Download failed:", error);
+                messageBox.textContent = `Error initiating download for ${filename}. The image URL may be restricted or the image is missing.`;
+                messageBox.classList.remove('bg-yellow-100', 'text-yellow-700');
+                messageBox.classList.add('bg-red-100', 'text-red-700');
+            }
+        }
+        
+        /**
+         * Helper function to handle clicks on the dynamically generated quality buttons.
+         */
+        function handleDownloadClick(event, url, filename) {
+            event.preventDefault(); // Stop the default anchor link behavior
+            forceDownload(url, filename);
+        }
+
+        /**
+         * Helper function to handle clicks on the main MaxRes download button.
+         */
+        function handleMaxResDownload(event) {
+            event.preventDefault(); // Stop the default anchor link behavior
+            const downloadLink = document.getElementById('maxResDownload');
+            
+            // Check if the button is currently disabled due to the placeholder image
+            if (downloadLink.classList.contains('cursor-not-allowed')) {
+                 const messageBox = document.getElementById('messageBox');
+                 messageBox.textContent = 'Download failed: No usable thumbnail URL is currently available.';
+                 messageBox.classList.remove('hidden', 'bg-yellow-100', 'text-yellow-700');
+                 messageBox.classList.add('bg-red-100', 'text-red-700');
+                 return;
+            }
+
+            // The href and download attributes are kept up-to-date by the fallback logic
+            forceDownload(downloadLink.href, downloadLink.download);
+        }
+
         /**
          * Handles the case where the highest resolution thumbnail (maxresdefault.jpg) fails to load.
          * It falls back to sddefault.jpg, or a placeholder if that also fails.
@@ -134,7 +208,7 @@
                 maxResDownload.href = hqResUrl;
                 maxResDownload.download = "youtube_thumbnail_hqres.jpg";
                 maxResDownload.classList.remove('opacity-50', 'cursor-not-allowed');
-                maxResDownload.onclick = null;
+                maxResDownload.onclick = handleMaxResDownload;
                 
                 previewLabel.textContent = 'Highest Available Quality (High Definition - hqdefault)';
                 messageBox.textContent = 'Warning: Max and Standard resolution thumbnails were not found. The preview and download link are now using the High Definition (480x360) quality.';
@@ -146,7 +220,7 @@
                  maxResDownload.href = '#';
                  maxResDownload.download = '';
                  maxResDownload.classList.add('opacity-50', 'cursor-not-allowed');
-                 maxResDownload.onclick = (e) => { e.preventDefault(); };
+                 maxResDownload.onclick = handleMaxResDownload; // Still assign the handler to show the message
                 
                  previewLabel.textContent = 'Thumbnail Unavailable';
                  messageBox.textContent = 'Error: No high-quality thumbnail found for this video. Showing the lowest available default or a generic placeholder.';
@@ -163,7 +237,7 @@
                 maxResDownload.href = sdResUrl;
                 maxResDownload.download = "youtube_thumbnail_sdres.jpg";
                 maxResDownload.classList.remove('opacity-50', 'cursor-not-allowed');
-                maxResDownload.onclick = null; 
+                maxResDownload.onclick = handleMaxResDownload; // Re-assign the new robust handler
                 
                 previewLabel.textContent = 'Highest Available Quality (Standard Definition - sddefault)';
                 messageBox.textContent = 'Note: Max resolution thumbnail (1280x720) was not found. The preview and main download button now show the Standard Definition (640x480) quality.';
@@ -219,14 +293,17 @@
             maxResDownload.href = maxResUrl;
             maxResDownload.download = "youtube_thumbnail_maxres.jpg";
             
-            // Reset error handling classes on download button
+            // Re-enable the button and assign the robust handler
             maxResDownload.classList.remove('opacity-50', 'cursor-not-allowed');
-            maxResDownload.onclick = null;
+            maxResDownload.onclick = handleMaxResDownload;
             
             
             // 2. Generate the buttons for other quality options
             formats.filter(f => !f.default).forEach(format => {
                 const url = `${baseUrl}/${format.filename}`;
+                const filename = `youtube_thumbnail_${format.id}.jpg`;
+                
+                // Note: The onclick calls the new robust download function.
                 const cardHtml = `
                     <div class="bg-white p-4 rounded-lg shadow-md hover:shadow-xl transition duration-300 border border-gray-100">
                         <p class="font-semibold text-gray-700 mb-2">${format.label}</p>
@@ -238,7 +315,8 @@
                             >
                         </a>
                         <a href="${url}" 
-                           download="youtube_thumbnail_${format.id}.jpg" 
+                           download="${filename}" 
+                           onclick="handleDownloadClick(event, '${url}', '${filename}')"
                            class="btn btn-secondary w-full text-center px-4 py-2 rounded-lg font-semibold shadow-md focus:ring-4 focus:ring-emerald-300">
                             Download ${format.id.toUpperCase()}
                         </a>
@@ -291,8 +369,6 @@
             generateThumbnailData(videoId);
         }
 
-        // Global variable for storing the extracted Video ID
-        let currentVideoId = null;
 
         /*
          * Global Paste Listener for Ctrl+V / Cmd+V
